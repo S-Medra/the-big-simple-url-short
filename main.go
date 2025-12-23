@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"html/template"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
+	"fmt"
 )
 
 const port = "8080"
@@ -14,20 +15,25 @@ type URLShortener struct {
 	urls map[string]string
 }
 
+type ShortenPageData struct {
+	OriginalURL  string
+	ShortenedURL string
+}
+
 func (us *URLShortener) HandleForm(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
-	//TODO refactor the inline html
+
+	tmpl, err := template.ParseFiles("index.html")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `
-		<h2>URL Shortener</h2>
-		<form method="post" action="/shorten">
-			<input type="text" name="url" placeholder="Enter a URL">
-			<input type="submit" value="Shorten">
-		</form>
-	`)
+	tmpl.Execute(w, nil)
 }
 
 func (us *URLShortener) HandleShorten(w http.ResponseWriter, r *http.Request) {
@@ -45,19 +51,21 @@ func (us *URLShortener) HandleShorten(w http.ResponseWriter, r *http.Request) {
 	shortKey := generateShortKey()
 	us.urls[shortKey] = originalURL
 
-	shortenedURL := fmt.Sprintf("http://localhost:%s/short/%s", port, shortKey)
+	shortenedURL := "http://localhost:" + port + "/short/" + shortKey
+
+	tmpl, err := template.ParseFiles("shorten.html")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	data := ShortenPageData{
+		OriginalURL:  originalURL,
+		ShortenedURL: shortenedURL,
+	}
 
 	w.Header().Set("Content-Type", "text/html")
-	responseHTML := fmt.Sprintf(`
-        <h2>URL Shortener</h2>
-        <p>Original URL: %s</p>
-        <p>Shortened URL: <a href="%s">%s</a></p>
-        <form method="post" action="/shorten">
-            <input type="text" name="url" placeholder="Enter a URL">
-            <input type="submit" value="Shorten">
-        </form>
-    `, originalURL, shortenedURL, shortenedURL)
-	fmt.Fprintf(w, responseHTML)
+	tmpl.Execute(w, data)
 }
 
 func (us *URLShortener) HandleRedirect(w http.ResponseWriter, r *http.Request) {
